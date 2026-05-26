@@ -45,7 +45,7 @@ chmod +x ~/.local/bin/convert_to_mkv.py
 ## Usage
 
 ```
-convert_to_mkv.py <source> [dest] [options]
+convert_to_mkv.py [options] <source> [dest]
 ```
 
 | Argument | Description |

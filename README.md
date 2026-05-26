@@ -199,6 +199,12 @@ is preserved via `ffmpeg -map_metadata 0`.
 
 `ffmpeg`'s progress output reflects how much data it has *processed*, not how much has been *flushed to disk*. On NFS or SMB shares the OS accumulates writes in a kernel buffer and drains it to the network in the background. This causes the progress bar to race to ~85–95% quickly and then appear to stall while the buffer flushes. The total elapsed time is accurate. This is normal OS behaviour and not a bug in the script.
 
+## Screenshots
+
+![convert_to_mkv output 1](screenshots/screenshot1.png)
+
+![convert_to_mkv output 2](screenshots/screenshot2.png)
+
 ## License
 
 MIT

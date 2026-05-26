@@ -72,6 +72,14 @@ def parse_nfo_xml(contents):
     if aired:
         metadata['date'] = aired
 
+    season = find_text('.//season')
+    if season and season.lstrip('-').isdigit():
+        metadata['season'] = str(int(season))
+
+    episode = find_text('.//episode')
+    if episode and episode.lstrip('-').isdigit():
+        metadata['episode'] = str(int(episode))
+
     tvdb_id = None
     for uid in root.findall('.//uniqueid'):
         if uid.get('type', '').lower() == 'tvdb':
@@ -191,6 +199,72 @@ def parse_nfo_metadata(nfo_dir, source_basename=None):
             metadata['imdb_id'] = imdb_match.group(0)
 
     return metadata
+
+
+def parse_tv_filename(stem):
+    """
+    Detect whether *stem* (filename without extension) matches the TV show
+    naming pattern ``Series Name - S01E02 - Episode Title`` and, if so,
+    return a dict with keys:
+
+        collection    – series / show name
+        season        – season number as a bare integer string (no leading zeros)
+        episode       – episode number as a bare integer string (no leading zeros)
+        episode_title – episode title (may be empty string)
+
+    Returns None when no SxxExx token is found in the stem.
+    """
+    # Match SxxExx anywhere in the filename
+    se_match = re.search(r'[Ss](\d+)[Ee](\d+)', stem)
+    if not se_match:
+        return None
+
+    season  = str(int(se_match.group(1)))   # strip leading zeros
+    episode = str(int(se_match.group(2)))
+
+    # Try to parse "Series - S01E02 - Episode Title" (New-Tags3 convention)
+    parts = re.split(r'\s+-\s+', stem, maxsplit=2)
+    if len(parts) >= 2:
+        collection    = parts[0].strip()
+        episode_title = parts[2].strip() if len(parts) == 3 else ''
+    else:
+        # Fallback: everything before the SxxExx token is the series name
+        collection    = stem[:se_match.start()].strip(' -_')
+        episode_title = stem[se_match.end():].strip(' -_')
+
+    return {
+        'collection':    collection,
+        'season':        season,
+        'episode':       episode,
+        'episode_title': episode_title,
+    }
+
+
+def get_tvshow_name(input_file):
+    """
+    Walk up the directory tree from input_file looking for a tvshow.nfo.
+    If found, parse and return the <title> element (the series name).
+    Returns None if not found or unparseable.
+    """
+    directory = os.path.dirname(os.path.abspath(input_file))
+    # Search current dir plus up to 3 parent levels (Season → Series → ...)
+    for _ in range(4):
+        candidate = os.path.join(directory, 'tvshow.nfo')
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, 'r', encoding='utf-8', errors='replace') as fh:
+                    contents = fh.read()
+                root = ET.fromstring(contents)
+                title = root.findtext('.//title')
+                if title and title.strip():
+                    return title.strip()
+            except (OSError, ET.ParseError):
+                pass
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            break
+        directory = parent
+    return None
 
 
 def get_nfo_metadata_for_file(input_file):
@@ -473,7 +547,7 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
 
         nfo_metadata = get_nfo_metadata_for_file(input_file)
         if nfo_metadata:
-            print(f"{colors.orange}Applying NFO metadata from .nfo folder:{colors.reset}")
+            print(f"{colors.orange}NFO metadata found:{colors.reset}")
             for meta_key in sorted(nfo_metadata):
                 print(f"  {meta_key}: {nfo_metadata[meta_key]}")
 
@@ -491,17 +565,58 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
             '-c', 'copy',
         ]
 
-        if nfo_metadata:
+        stem    = os.path.splitext(filename)[0]
+        tv_info = parse_tv_filename(stem)
+
+        # Also treat as TV if the NFO carries a TVDB ID (e.g. filename lacks
+        # SxxExx but Jellyfin/Kodi wrote episodedetails with <uniqueid type="tvdb">).
+        if tv_info is None and nfo_metadata and nfo_metadata.get('tvdb_id'):
+            tvshow_name = get_tvshow_name(input_file)
+            tv_info = {
+                'collection':    tvshow_name or stem,
+                'season':        nfo_metadata.get('season', ''),
+                'episode':       nfo_metadata.get('episode', ''),
+                'episode_title': nfo_metadata.get('title', ''),
+            }
+
+        is_tv = tv_info is not None
+
+        if is_tv:
+            se_str = ''
+            s, e = tv_info.get('season', ''), tv_info.get('episode', '')
+            if s and e:
+                se_str = f", S{s.zfill(2)}E{e.zfill(2)}"
+            print(f"{colors.orange}TV show detected — applying TV tags "
+                  f"(Collection={tv_info['collection']!r}{se_str}){colors.reset}")
+            # ---- TV show tagging (New-Tags3 style) -------------------------
+            # Filename-derived tags are always applied; NFO enriches Comment
+            # and Released_Date when available.
+            tv_tags = {
+                'Title':         stem,
+                'Collection':    tv_info.get('collection', ''),
+                'Season':        tv_info.get('season', ''),
+                'Episode':       tv_info.get('episode', ''),
+                'Movie':         tv_info.get('episode_title', ''),
+                'Comment':       (nfo_metadata or {}).get('description', ''),
+                'Released_Date': (nfo_metadata or {}).get('date', ''),
+            }
+            for tag, value in tv_tags.items():
+                if not value:
+                    continue
+                value = ' '.join(value.splitlines()).strip()
+                cmd.extend(['-metadata', f'{tag}={value}'])
+        elif nfo_metadata:
+            # ---- Standard (movie / generic) tagging -----------------------
             metadata_keys = {
-                'title': 'title',
+                'title':       'title',
                 'description': 'description',
-                'comment': 'comment',
-                'imdb_id': 'IMDB_ID',
-                'tvdb_id': 'TVDB_ID',
-                'actors': 'actor',
-                'director': 'director',
-                'genre': 'genre',
-                'date': 'date',
+                'comment':     'comment',
+                'imdb_id':     'IMDB_ID',
+                'tvdb_id':     'TVDB_ID',
+                'actors':      'actor',
+                'director':    'director',
+                'genre':       'genre',
+                'date':        'date',
             }
             for key, tag in metadata_keys.items():
                 value = nfo_metadata.get(key)

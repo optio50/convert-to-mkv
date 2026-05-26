@@ -7,7 +7,8 @@ A Python command-line tool that losslessly remuxes video files into the MKV cont
 - **Lossless remux** — stream copy only, zero quality loss, fast
 - **Single file or directory** input
 - **Recursive traversal** with `--depth N`
-- **NFO/XML sidecar metadata embedding** — reads Kodi/Jellyfin `episodedetails` XML or plain `key: value` text files and writes tags into the MKV
+- **TV show detection and tagging** — automatically identifies TV episodes from `SxxExx` filename patterns or a TVDB ID in the sidecar NFO; writes structured `Collection`, `Season`, `Episode`, `Movie` (episode title), `Comment`, and `Released_Date` tags
+- **NFO/XML sidecar metadata embedding** — reads Kodi/Jellyfin `episodedetails` XML or plain `key: value` text files and writes tags into the MKV; for TV episodes the series name is resolved from a `tvshow.nfo` in a parent directory
 - **Live color progress bar** with percentage and elapsed time
 - **Post-conversion validation** — checks output size and duration before declaring success
 - **`--replace`** — deletes the original source file only after all validation passes
@@ -122,13 +123,12 @@ Only exact basename matches are used — unrelated `.nfo` files elsewhere in the
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <episodedetails>
-  <title>Pilot</title>
-  <plot>A thrilling first episode.</plot>
-  <aired>2024-03-15</aired>
-  <director>Jane Smith</director>
-  <genre>Drama</genre>
-  <uniqueid type="tvdb">12345</uniqueid>
-  <uniqueid type="imdb">tt1234567</uniqueid>
+  <title>Naughty or Nice</title>
+  <season>10</season>
+  <episode>2</episode>
+  <aired>2019-10-04</aired>
+  <plot>Frank and Erin are at odds when Frank learns the district attorney's office...</plot>
+  <uniqueid type="tvdb" default="true">7306576</uniqueid>
 </episodedetails>
 ```
 
@@ -142,7 +142,43 @@ imdb: tt1234567
 year: 2023
 ```
 
-### Recognised tags
+## TV Show Tagging
+
+A file is treated as a TV episode when **either** condition is met:
+
+1. **Filename contains `SxxExx`** — e.g. `Blue Bloods - S10E02 - Naughty or Nice.mp4`
+2. **Sidecar NFO contains a TVDB uniqueid** — e.g. `<uniqueid type="tvdb">7306576</uniqueid>`
+
+When TV mode is active the following MKV tags are written (New-Tags3 style):
+
+| MKV tag | Source |
+|---|---|
+| `Title` | Full filename stem |
+| `Collection` | Series name — from filename (part before ` - SxxExx`) or `tvshow.nfo` `<title>` |
+| `Season` | Season number (bare integer, no leading zeros) |
+| `Episode` | Episode number (bare integer, no leading zeros) |
+| `Movie` | Episode title — from filename (part after `SxxExx - `) or NFO `<title>` |
+| `Comment` | NFO `<plot>` |
+| `Released_Date` | NFO `<aired>` |
+
+### Series name resolution
+
+When the series name cannot be inferred from the filename the script walks up the
+directory tree (up to 4 levels) looking for a `tvshow.nfo` and reads its `<title>` element.
+A typical Kodi/Jellyfin library layout already places this file in the show's root folder:
+
+```
+/media/TV/Blue Bloods/
+    tvshow.nfo                     ← <title>Blue Bloods</title>
+    Season 10/
+        Blue Bloods - S10E02.mp4
+        Blue Bloods - S10E02.nfo
+```
+
+### Movie tagging
+
+Files that are **not** identified as TV episodes fall through to standard movie tagging
+when a sidecar NFO is present:
 
 | NFO key(s) | MKV tag |
 |---|---|
@@ -155,6 +191,9 @@ year: 2023
 | `director`, `directors` | `director` |
 | `genre`, `genres` | `genre` |
 | `year`, `released`, `releaseyear`, `aired` | `date` |
+
+If no NFO is found at all, any metadata already embedded in the source container
+is preserved via `ffmpeg -map_metadata 0`.
 
 ## Note on NFS / Network Destinations
 

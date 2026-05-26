@@ -722,6 +722,7 @@ def main():
     check_dependencies()
 
     parser = argparse.ArgumentParser(
+        usage='%(prog)s [options] <source> [dest]',
         description=(
             "Remux video files into an MKV container using stream copy (no re-encoding).\n"
             "All video, audio, subtitle, and attachment streams are preserved exactly.\n"

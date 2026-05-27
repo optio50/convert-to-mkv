@@ -6,22 +6,27 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 import xml.etree.ElementTree as ET
 
 
 class colors:
-    green    = "\033[38;5;28m"
-    Bogreen  = "\033[1;38;5;28m"
-    red      = "\033[31m"
-    BoRed    = "\033[1;31m"
-    orange   = "\033[38;5;202m"
-    yellow   = "\033[38;5;190m"
-    pink     = "\033[38;5;200m"
-    Lblue    = "\033[38;5;117m"
-    rblue    = "\033[38;5;63m"
-    lmagenta = "\033[38;5;95m"
-    reset    = "\033[0m"
+    green             = "\033[38;5;28m"
+    Bogreen           = "\033[1;38;5;28m"
+    red               = "\033[31m"
+    BoRed             = "\033[1;31m"
+    orange            = "\033[38;5;202m"
+    yellow            = "\033[38;5;190m"
+    pink              = "\033[38;5;200m"
+    Lblue             = "\033[38;5;117m"
+    rblue             = "\033[38;5;63m"
+    lmagenta          = "\033[38;5;95m"
+    deep_sky_blue_4c  = "\033[38;5;25m"
+    gray              = "\033[38;5;245m"
+    magenta_2a        = "\033[38;5;165m"
+    medium_purple_3b  = "\033[38;5;98m"
+    reset             = "\033[0m"
 
 
 def natural_sort_key(s):
@@ -346,7 +351,7 @@ def print_progress(current, total, elapsed):
     else:
         bar = '#' * (bar_width // 2) + '-' * (bar_width - bar_width // 2)
         status = f"[{bar}] {format_duration(current)}"
-    sys.stdout.write(f"{colors.orange}Progress.......:\t{status}  elapsed {format_duration(elapsed)}\r{colors.reset}")
+    sys.stdout.write(f"{colors.gray}Progress.......:\t{colors.orange}{status}{colors.medium_purple_3b}  elapsed {format_duration(elapsed)}\r{colors.reset}")
     sys.stdout.flush()
 
 
@@ -548,8 +553,16 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
         nfo_metadata = get_nfo_metadata_for_file(input_file)
         if nfo_metadata:
             print(f"{colors.orange}NFO metadata found:{colors.reset}")
+            subsequent_indent = ' ' * 24  # aligns with text after 15-char label + ':' + tab
             for meta_key in sorted(nfo_metadata):
-                print(f"  {meta_key}: {nfo_metadata[meta_key]}")
+                value = nfo_metadata[meta_key]
+                label = meta_key.replace('_', ' ').title().replace(' ', '_').ljust(15, '.')
+                if meta_key == 'description':
+                    lines = textwrap.wrap(value, width=56)
+                    desc_text = ('\n' + subsequent_indent).join(lines)
+                    print(f"{colors.gray}{label}:{colors.reset}\t{colors.deep_sky_blue_4c}{desc_text}{colors.reset}")
+                else:
+                    print(f"{colors.gray}{label}:{colors.reset}\t{colors.yellow}{value}{colors.reset}")
 
         cmd = [
             'ffmpeg', '-y',
@@ -586,7 +599,7 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
             s, e = tv_info.get('season', ''), tv_info.get('episode', '')
             if s and e:
                 se_str = f", S{s.zfill(2)}E{e.zfill(2)}"
-            print(f"{colors.orange}TV show detected — applying TV tags "
+            print(f"{colors.magenta_2a}TV show detected — applying TV tags "
                   f"(Collection={tv_info['collection']!r}{se_str}){colors.reset}")
             # ---- TV show tagging (New-Tags3 style) -------------------------
             # Filename-derived tags are always applied; NFO enriches Comment
@@ -599,6 +612,7 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
                 'Movie':         tv_info.get('episode_title', ''),
                 'Comment':       (nfo_metadata or {}).get('description', ''),
                 'Released_Date': (nfo_metadata or {}).get('date', ''),
+                'tvdb_id':       (nfo_metadata or {}).get('tvdb_id', ''),
             }
             for tag, value in tv_tags.items():
                 if not value:
@@ -612,7 +626,7 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
                 'description': 'description',
                 'comment':     'comment',
                 'imdb_id':     'IMDB_ID',
-                'tvdb_id':     'TVDB_ID',
+                'tvdb_id':     'tvdb_id',
                 'actors':      'actor',
                 'director':    'director',
                 'genre':       'genre',
@@ -666,6 +680,8 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
                 print(f"{colors.yellow}Keeping original file.{colors.reset}\n")
             else:
                 conversion_ok = True
+                if not max_verify:
+                    print(f"{colors.green}Integrity check:\tPASSED (size + duration OK){colors.reset}")
                 if max_verify:
                     decode_ok, decode_errors = decode_check(output_file, duration)
                     elapsed = time.time() - start_time
@@ -678,8 +694,7 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
                     else:
                         print(f"{colors.green}Decode check...:\tOK                {colors.reset}")
                 if conversion_ok:
-                    print(f"{colors.green}Done.{colors.reset}")
-                    print(f"{colors.orange}Elapsed.......: {format_duration(elapsed)}{colors.reset}")
+                    print(f"{colors.gray}Elapsed........:\t{colors.Lblue}{format_duration(elapsed)}{colors.reset}")
                     if replace:
                         try:
                             os.remove(input_file)
@@ -710,6 +725,9 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
             if os.path.exists(output_file):
                 os.remove(output_file)
             print()
+
+        if total > 1:
+            print(f"{colors.gray}{'=' * 70}{colors.reset}")
 
     print('=' * 80)
 

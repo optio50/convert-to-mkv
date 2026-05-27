@@ -45,7 +45,7 @@ chmod +x ~/.local/bin/convert_to_mkv.py
 ## Usage
 
 ```
-convert_to_mkv.py [options] <source> [dest]
+convert_to_mkv.py <source> [dest] [options]
 ```
 
 | Argument | Description |
@@ -173,6 +173,7 @@ A typical Kodi/Jellyfin library layout already places this file in the show's ro
     Season 10/
         Blue Bloods - S10E02.mp4
         Blue Bloods - S10E02.nfo
+```
 
 ### Movie tagging
 
@@ -200,9 +201,9 @@ is preserved via `ffmpeg -map_metadata 0`.
 
 ## Screenshots
 
-![convert_to_mkv output 2026-05-27 10-02-55](<screenshots/Convert_To_MKV at 2026-05-27 10-02-55.png>)
+![convert_to_mkv output 1](screenshots/screenshot1.png)
 
-![convert_to_mkv output 2026-05-27 10-01-50](<screenshots/Convert_To_MKV at 2026-05-27 10-01-50.png>)
+![convert_to_mkv output 2](screenshots/screenshot2.png)
 
 ## License
 

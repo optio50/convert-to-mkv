@@ -5,7 +5,7 @@ A Python command-line tool that losslessly remuxes video files into the MKV cont
 ## Features
 
 - **Lossless remux** — stream copy only, zero quality loss, fast
-- **Single file or directory** input
+- **Single file, directory, or multiple sources** input
 - **Recursive traversal** with `--depth N`
 - **TV show detection and tagging** — automatically identifies TV episodes from `SxxExx` filename patterns or a TVDB ID in the sidecar NFO; writes structured `Collection`, `Season`, `Episode`, `Movie` (episode title), `Comment`, and `Released_Date` tags
 - **NFO/XML sidecar metadata embedding** — reads Kodi/Jellyfin `episodedetails` XML or plain `key: value` text files and writes tags into the MKV; for TV episodes the series name is resolved from a `tvshow.nfo` in a parent directory
@@ -45,13 +45,13 @@ chmod +x ~/.local/bin/convert_to_mkv.py
 ## Usage
 
 ```
-convert_to_mkv.py <source> [dest] [options]
+convert_to_mkv.py [options] <source> [<source> ...]
 ```
 
 | Argument | Description |
 |---|---|
-| `source` | Source video file or directory |
-| `dest` | Destination directory (defaults to same directory as source) |
+| `source` | One or more source video files or directories |
+| `--dest DIR` | Shared destination directory for converted MKV files; if omitted, each output is written to the source file's directory |
 | `--depth N` | Recurse N levels deep into sub-directories (0 = top-level only) |
 | `--replace` | Delete the original after a successful validated conversion |
 | `--max-verify` | Full silent decode pass on output to catch bitstream errors (slower) |
@@ -63,19 +63,22 @@ convert_to_mkv.py <source> [dest] [options]
 convert_to_mkv.py /media/videos
 
 # Remux to a different destination
-convert_to_mkv.py /media/videos /media/mkv_output
+convert_to_mkv.py /media/videos --dest /media/mkv_output
 
-# Remux a single file
-convert_to_mkv.py /media/videos/movie.mp4 /media/mkv_output
+# Remux a single file to a destination
+convert_to_mkv.py /media/videos/movie.mp4 --dest /media/mkv_output
+
+# Remux multiple inputs to a destination
+convert_to_mkv.py /media/file1.mp4 /media/file2.mov --dest /media/mkv_output
 
 # Recurse 2 levels deep
-convert_to_mkv.py /media/shows /media/mkv_output --depth 2
+convert_to_mkv.py /media/shows --dest /media/mkv_output --depth 2
 
 # Remux and delete originals after verified conversion
-convert_to_mkv.py /media/videos /media/mkv_output --replace
+convert_to_mkv.py /media/videos --dest /media/mkv_output --replace
 
 # Remux, full decode verification, then delete originals
-convert_to_mkv.py /media/videos /media/mkv_output --replace --max-verify
+convert_to_mkv.py /media/videos --dest /media/mkv_output --replace --max-verify
 ```
 
 ## Supported Input Formats

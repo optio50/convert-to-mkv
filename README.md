@@ -72,7 +72,7 @@ convert_to_mkv.py /media/videos/movie.mp4 --dest /media/mkv_output
 convert_to_mkv.py /media/file1.mp4 /media/file2.mov --dest /media/mkv_output
 
 # Recurse 2 levels deep
-convert_to_mkv.py /media/shows --depth 2 --dest /media/mkv_output
+convert_to_mkv.py --depth 2 /media/shows --dest /media/mkv_output
 
 # Remux and delete originals after verified conversion
 convert_to_mkv.py --replace /media/videos --dest /media/mkv_output

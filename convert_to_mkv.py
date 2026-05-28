@@ -808,7 +808,7 @@ def main():
             "Examples:\n"
             "  convert_to_mkv.py /path/to/source --dest /path/to/dest\n"
             "  convert_to_mkv.py /path/to/file.mp4 --dest /path/to/dest\n"
-            "  convert_to_mkv.py /path/to/source --depth 2 --dest /path/to/dest\n"
+            "  convert_to_mkv.py --depth 2 /path/to/source --dest /path/to/dest\n"
             "  convert_to_mkv.py /path/to/source          (dest defaults to source dir)\n"
             "  convert_to_mkv.py --replace /src --dest /path/to/dest\n"
             "  convert_to_mkv.py --replace --max-verify /src --dest /path/to/dest\n"

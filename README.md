@@ -75,10 +75,10 @@ convert_to_mkv.py /media/file1.mp4 /media/file2.mov --dest /media/mkv_output
 convert_to_mkv.py /media/shows --dest /media/mkv_output --depth 2
 
 # Remux and delete originals after verified conversion
-convert_to_mkv.py /media/videos --dest /media/mkv_output --replace
+convert_to_mkv.py --replace --dest /media/mkv_output /media/videos
 
 # Remux, full decode verification, then delete originals
-convert_to_mkv.py /media/videos --dest /media/mkv_output --replace --max-verify
+convert_to_mkv.py --replace --max-verify --dest /media/mkv_output /media/videos
 
 # Batch files found by fd (shared output)
 # Use `fd` to find files and pass all matches to the script at once, writing all outputs to a shared destination

@@ -806,12 +806,12 @@ def main():
         ),
         epilog=(
             "Examples:\n"
-            "  convert_to_mkv.py /path/to/source --dest /path/to/dest\n"
-            "  convert_to_mkv.py /path/to/file.mp4 --dest /path/to/dest\n"
-            "  convert_to_mkv.py /path/to/source --dest /path/to/dest --depth 2\n"
+            "  convert_to_mkv.py --dest /path/to/dest /path/to/source\n"
+            "  convert_to_mkv.py --dest /path/to/dest /path/to/file.mp4\n"
+            "  convert_to_mkv.py --dest /path/to/dest --depth 2 /path/to/source\n"
             "  convert_to_mkv.py /path/to/source          (dest defaults to source dir)\n"
-            "  convert_to_mkv.py /src /dest --replace      (delete originals after conversion)\n"
-            "  convert_to_mkv.py /src /dest --replace --max-verify  (full decode + delete)\n"
+            "  convert_to_mkv.py --replace --dest /path/to/dest /src\n"
+            "  convert_to_mkv.py --replace --max-verify --dest /path/to/dest /src\n"
             "  fd -e mp4 -X convert_to_mkv.py {}          (batch files from fd)\n"
             "\n"
             "NFO sidecar lookup:\n"

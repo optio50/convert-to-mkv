@@ -81,11 +81,11 @@ convert_to_mkv.py /media/videos --dest /media/mkv_output --replace
 convert_to_mkv.py /media/videos --dest /media/mkv_output --replace --max-verify
 
 # Batch files found by fd (shared output)
-# Use `fd` to find files and run the script once per match, writing all outputs to a shared destination
+# Use `fd` to find files and pass all matches to the script at once, writing all outputs to a shared destination
 fd -e mp4 -X convert_to_mkv.py {} --dest /media/mkv_output
 
 # Batch files found by fd (default output)
-# Use `fd` to find files and run the script once per match, writing each output next to its source file
+# Use `fd` to find files and pass all matches to the script at once, writing each output next to its source file
 fd -e mp4 -X convert_to_mkv.py {}
 ```
 

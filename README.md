@@ -79,6 +79,10 @@ convert_to_mkv.py /media/videos --dest /media/mkv_output --replace
 
 # Remux, full decode verification, then delete originals
 convert_to_mkv.py /media/videos --dest /media/mkv_output --replace --max-verify
+
+# Batch files found by fd
+# Use `fd` to find files and run the script once per match
+fd -e mp4 -X convert_to_mkv.py {} --dest /media/mkv_output
 ```
 
 ## Supported Input Formats

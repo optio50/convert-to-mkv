@@ -42,6 +42,12 @@ def format_bytes(size):
         size /= 1024.0
     return f"{size:.1f} EB"
 
+VIDEO_EXTENSIONS = (
+    '.mp4', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v',
+    '.ts', '.m2ts', '.mts', '.mpg', '.mpeg', '.3gp',
+    '.ogv', '.ogg', '.rmvb', '.divx', '.vob'
+)
+
 
 def get_duration_seconds(path):
     try:
@@ -452,66 +458,83 @@ def validate_output(input_file, output_file, input_duration):
     return True, None
 
 
-def convert(source, dest, depth=0, replace=False, max_verify=False):
-    # Single file mode — resolve to absolute path before splitting dir/basename
-    if os.path.isfile(source):
-        source      = os.path.abspath(source)
-        if os.path.splitext(source)[1].lower() == '.mkv':
-            print(f"{colors.yellow}Skipping source file because it is already MKV: {source}{colors.reset}")
-            return
-        files       = [source]
-        source      = os.path.dirname(source) or os.getcwd()
-    elif os.path.isdir(source):
-        source = os.path.abspath(source)
-        files  = None  # resolved below
-    else:
-        print(f"{colors.BoRed}Error: Source does not exist: {source}{colors.reset}")
-        sys.exit(1)
-
-    dest = os.path.abspath(dest)
-
-    os.makedirs(dest, exist_ok=True)
-
-    extensions = (
-        '.mp4', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v',
-        '.ts', '.m2ts', '.mts', '.mpg', '.mpeg', '.3gp',
-        '.ogv', '.ogg', '.rmvb', '.divx', '.vob'
-    )
-
-    if files is None:
-        if depth == 0:
-            files = sorted(
-                [os.path.join(source, f) for f in os.listdir(source)
-                 if f.lower().endswith(extensions)],
-                key=lambda p: natural_sort_key(os.path.basename(p))
-            )
-        else:
-            root_depth = source.rstrip(os.sep).count(os.sep)
-            files = []
-            for root, dirs, filenames in os.walk(source):
-                current_depth = root.count(os.sep) - root_depth
-                if current_depth > depth:
-                    dirs[:] = []
-                    continue
-                for f in filenames:
-                    if f.lower().endswith(extensions):
-                        files.append(os.path.join(root, f))
-            files.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
-
-    if not files:
-        print(f"{colors.yellow}No matching files found in: {source}{colors.reset}")
+def prompt_press_any_key():
+    if not sys.stdin.isatty():
         return
+    try:
+        input(f"{colors.yellow}Press Enter to continue...{colors.reset}")
+    except (EOFError, KeyboardInterrupt):
+        pass
 
-    total = len(files)
+
+def scan_source_files(source, depth=0):
+    source = os.path.abspath(source)
+    if os.path.isfile(source):
+        return [(source, os.path.dirname(source))]
+
+    files = []
+    if depth == 0:
+        for entry in os.listdir(source):
+            if entry.lower().endswith(VIDEO_EXTENSIONS):
+                files.append((os.path.join(source, entry), source))
+    else:
+        root_depth = source.rstrip(os.sep).count(os.sep)
+        for root, dirs, filenames in os.walk(source):
+            current_depth = root.count(os.sep) - root_depth
+            if current_depth > depth:
+                dirs[:] = []
+                continue
+            for entry in filenames:
+                if entry.lower().endswith(VIDEO_EXTENSIONS):
+                    files.append((os.path.join(root, entry), source))
+    files.sort(key=lambda pair: natural_sort_key(os.path.basename(pair[0])))
+    return files
+
+
+def convert(source, dest, depth=0, replace=False, max_verify=False):
+    if isinstance(source, list):
+        sources = source
+    else:
+        sources = [source]
+    return convert_sources(sources, dest, depth=depth,
+                           replace=replace, max_verify=max_verify)
+
+
+def convert_sources(sources, dest, depth=0, replace=False, max_verify=False):
+    resolved_files = []
+    failures = []
+
+    for source in sources:
+        if os.path.isfile(source):
+            resolved_files.append((os.path.abspath(source), os.path.dirname(os.path.abspath(source))))
+        elif os.path.isdir(source):
+            resolved_files.extend(scan_source_files(source, depth))
+        else:
+            print(f"{colors.BoRed}Error: Source does not exist: {source}{colors.reset}")
+            failures.append((source, 'source does not exist'))
+
+    if not resolved_files:
+        if not failures:
+            print(f"{colors.yellow}No matching files found in: {sources}{colors.reset}")
+        return failures
+
+    if dest is not None:
+        dest = os.path.abspath(dest)
+        os.makedirs(dest, exist_ok=True)
+
+    total = len(resolved_files)
     print(f"{colors.Bogreen}Files to be converted:{colors.reset}")
-    for f in files:
+    for f, _ in resolved_files:
         print(f"  {colors.Lblue}{os.path.basename(f)}{colors.reset}")
     print('=' * 80)
 
-    for i, input_file in enumerate(files, 1):
-        filename    = os.path.basename(input_file)
-        rel_dir     = os.path.relpath(os.path.dirname(input_file), source)
-        out_dir     = os.path.normpath(os.path.join(dest, rel_dir)) if rel_dir != '.' else dest
+    for i, (input_file, source_root) in enumerate(resolved_files, 1):
+        filename = os.path.basename(input_file)
+        if dest is None:
+            out_dir = os.path.dirname(input_file)
+        else:
+            rel_dir = os.path.relpath(os.path.dirname(input_file), source_root)
+            out_dir = os.path.normpath(os.path.join(dest, rel_dir)) if rel_dir != '.' else dest
         os.makedirs(out_dir, exist_ok=True)
         output_file = os.path.join(out_dir, f"{os.path.splitext(filename)[0]}.mkv")
 
@@ -677,31 +700,48 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
             valid, reason = validate_output(input_file, output_file, duration)
             if not valid:
                 print(f"{colors.BoRed}Validation failed: {reason}{colors.reset}")
+                if os.path.exists(output_file):
+                    try:
+                        os.remove(output_file)
+                    except OSError as rm_err:
+                        print(f"{colors.BoRed}Could not remove bad output file: {rm_err}{colors.reset}")
+                failures.append((filename, reason))
                 print(f"{colors.yellow}Keeping original file.{colors.reset}\n")
-            else:
-                conversion_ok = True
-                if not max_verify:
-                    print(f"{colors.green}Integrity check:\tPASSED (size + duration OK){colors.reset}")
-                if max_verify:
-                    decode_ok, decode_errors = decode_check(output_file, duration)
-                    elapsed = time.time() - start_time
-                    if not decode_ok:
-                        conversion_ok = False
-                        print(f"{colors.BoRed}Decode check...:\tFAILED            {colors.reset}")
-                        for err in decode_errors[:10]:
-                            print(f"{colors.red}  {err}{colors.reset}")
-                        print(f"{colors.yellow}Keeping original file.{colors.reset}\n")
-                    else:
-                        print(f"{colors.green}Decode check...:\tOK                {colors.reset}")
-                if conversion_ok:
-                    print(f"{colors.gray}Elapsed........:\t{colors.Lblue}{format_duration(elapsed)}{colors.reset}")
-                    if replace:
+                prompt_press_any_key()
+                print()
+                continue
+            conversion_ok = True
+            if not max_verify:
+                print(f"{colors.green}Integrity check:\tPASSED (size + duration OK){colors.reset}")
+            if max_verify:
+                decode_ok, decode_errors = decode_check(output_file, duration)
+                elapsed = time.time() - start_time
+                if not decode_ok:
+                    conversion_ok = False
+                    print(f"{colors.BoRed}Decode check...:\tFAILED            {colors.reset}")
+                    for err in decode_errors[:10]:
+                        print(f"{colors.red}  {err}{colors.reset}")
+                    if os.path.exists(output_file):
                         try:
-                            os.remove(input_file)
-                            print(f"{colors.lmagenta}Deleted original: {filename}{colors.reset}")
+                            os.remove(output_file)
                         except OSError as rm_err:
-                            print(f"{colors.BoRed}Could not delete original: {rm_err}{colors.reset}")
+                            print(f"{colors.BoRed}Could not remove bad output file: {rm_err}{colors.reset}")
+                    failures.append((filename, 'decode check failed'))
+                    print(f"{colors.yellow}Keeping original file.{colors.reset}\n")
+                    prompt_press_any_key()
                     print()
+                    continue
+                else:
+                    print(f"{colors.green}Decode check...:\tOK                {colors.reset}")
+            if conversion_ok:
+                print(f"{colors.gray}Elapsed........:\t{colors.Lblue}{format_duration(elapsed)}{colors.reset}")
+                if replace:
+                    try:
+                        os.remove(input_file)
+                        print(f"{colors.lmagenta}Deleted original: {filename}{colors.reset}")
+                    except OSError as rm_err:
+                        print(f"{colors.BoRed}Could not delete original: {rm_err}{colors.reset}")
+                print()
         except KeyboardInterrupt:
             sys.stdout.write('\033[2K\033[0m\033[?25h\n')
             sys.stdout.flush()
@@ -710,26 +750,44 @@ def convert(source, dest, depth=0, replace=False, max_verify=False):
             if os.path.exists(output_file):
                 os.remove(output_file)
             print(f"{colors.BoRed}Interrupted by user. Removed incomplete output file: {output_file}{colors.reset}\n")
-            return
+            return failures
         except subprocess.CalledProcessError as e:
             print(f"{colors.BoRed}Error converting {filename} (exit code {e.returncode}){colors.reset}")
             if e.stderr:
                 err_lines = e.stderr.strip().splitlines()
                 for line in err_lines[-5:]:
                     print(f"{colors.red}  {line}{colors.reset}")
-            if os.path.exists(output_file) and os.path.getsize(output_file) == 0:
-                os.remove(output_file)
+            if os.path.exists(output_file):
+                try:
+                    os.remove(output_file)
+                except OSError:
+                    pass
+            failures.append((filename, f'ffmpeg failed (exit code {e.returncode})'))
+            prompt_press_any_key()
             print()
         except Exception as e:
             print(f"{colors.BoRed}Error converting {filename}: {e}{colors.reset}")
             if os.path.exists(output_file):
-                os.remove(output_file)
+                try:
+                    os.remove(output_file)
+                except OSError:
+                    pass
+            failures.append((filename, str(e)))
+            prompt_press_any_key()
             print()
 
         if total > 1:
             print(f"{colors.gray}{'=' * 70}{colors.reset}")
 
+    if failures:
+        print(f"{colors.BoRed}Conversion summary: {len(failures)} failed file(s){colors.reset}")
+        for failed_file, reason in failures:
+            print(f"  {colors.red}{failed_file}:{colors.reset} {reason}")
+        print('=' * 80)
+        return failures
+
     print('=' * 80)
+    return failures
 
 
 def main():
@@ -740,7 +798,7 @@ def main():
     check_dependencies()
 
     parser = argparse.ArgumentParser(
-        usage='%(prog)s [options] <source> [dest]',
+        usage='%(prog)s [options] <source> [<source> ...] [--dest DEST]',
         description=(
             "Remux video files into an MKV container using stream copy (no re-encoding).\n"
             "All video, audio, subtitle, and attachment streams are preserved exactly.\n"
@@ -748,12 +806,13 @@ def main():
         ),
         epilog=(
             "Examples:\n"
-            "  convert_to_mkv.py /path/to/source /path/to/dest\n"
-            "  convert_to_mkv.py /path/to/file.mp4 /path/to/dest\n"
-            "  convert_to_mkv.py /path/to/source /path/to/dest --depth 2\n"
+            "  convert_to_mkv.py /path/to/source --dest /path/to/dest\n"
+            "  convert_to_mkv.py /path/to/file.mp4 --dest /path/to/dest\n"
+            "  convert_to_mkv.py /path/to/source --dest /path/to/dest --depth 2\n"
             "  convert_to_mkv.py /path/to/source          (dest defaults to source dir)\n"
             "  convert_to_mkv.py /src /dest --replace      (delete originals after conversion)\n"
             "  convert_to_mkv.py /src /dest --replace --max-verify  (full decode + delete)\n"
+            "  fd -e mp4 -X convert_to_mkv.py {}          (batch files from fd)\n"
             "\n"
             "NFO sidecar lookup:\n"
             "  The script looks for <basename>.nfo or <basename>.xml in the same directory\n"
@@ -773,11 +832,11 @@ def main():
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument('source',
-                        help='Source video file or directory containing video files.')
-    parser.add_argument('dest', nargs='?', default=None,
-                        help=('Destination directory for converted MKV files. '
-                              'Defaults to the same directory as the source.'))
+    parser.add_argument('sources', nargs='+',
+                        help='Source video file(s) or directory(ies) containing video files.')
+    parser.add_argument('--dest', default=None,
+                        help=('Shared destination directory for converted MKV files. '
+                              'When omitted, each output file is written to its source directory.'))
     parser.add_argument('--depth', type=int, default=0,
                         help=('How many directory levels deep to search for video files. '
                               '0 = top-level only, 1 = one sub-directory level, etc. Default: 0'))
@@ -795,13 +854,18 @@ def main():
                               'network share.'))
     args = parser.parse_args()
 
-    # Resolve default destination to the source's parent directory.
+    sources = args.sources
     dest = args.dest
-    if dest is None:
-        src = os.path.abspath(args.source)
-        dest = os.path.dirname(src) if os.path.isfile(src) else src
 
-    convert(args.source, dest, depth=args.depth, replace=args.replace, max_verify=args.max_verify)
+    if dest is not None:
+        dest = os.path.abspath(dest)
+
+    all_failures = convert(sources, dest, depth=args.depth,
+                            replace=args.replace, max_verify=args.max_verify)
+    if all_failures:
+        print(f"{colors.BoRed}Batch summary: {len(all_failures)} failed file(s){colors.reset}")
+        for failed_file, reason in all_failures:
+            print(f"  {colors.red}{failed_file}:{colors.reset} {reason}")
 
 
 if __name__ == "__main__":

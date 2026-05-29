@@ -589,6 +589,7 @@ def convert_sources(sources, dest, depth=0, replace=False, max_verify=False):
 
         cmd = [
             'ffmpeg', '-y',
+            '-fflags', '+genpts',  # generate missing packet timestamps for old/faulty AVI streams
             '-hide_banner',
             '-loglevel', 'info',
             '-i', input_file,
@@ -692,7 +693,7 @@ def convert_sources(sources, dest, depth=0, replace=False, max_verify=False):
             sys.stdout.flush()
 
             if proc.returncode != 0:
-                stderr = '\n'.join(output_lines[-20:])
+                stderr = '\n'.join(list(output_lines)[-20:])
                 raise subprocess.CalledProcessError(proc.returncode, cmd, stderr=stderr)
 
             output_size = os.path.getsize(output_file)

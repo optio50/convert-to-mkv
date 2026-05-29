@@ -14,6 +14,7 @@ A Python command-line tool that losslessly remuxes video files into the MKV cont
 - **`--replace`** — deletes the original source file only after all validation passes
 - **`--max-verify`** — optional full bitstream decode pass (`ffmpeg -f null`) with its own live progress bar; deletion is deferred until the decode is clean
 - **Partial output detection** — re-converts if an existing output looks incomplete
+- **Robust old AVI handling** — generates missing packet timestamps for broken AVI streams so they can be remuxed into MKV
 - **Graceful interrupt handling** — Ctrl+C kills ffmpeg and removes the incomplete output file
 
 ## Requirements
